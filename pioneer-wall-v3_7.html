@@ -1,0 +1,2425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pioneer Plan — Star Map</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --void: #03060f;
+    --deep: #070d1e;
+    --nebula: #0d1535;
+    --dust: #1a2550;
+    --star: #e8eeff;
+    --glow: #6b8cff;
+    --warm: #ffd9a0;
+    --accent: #4a6dff;
+  }
+
+  body {
+    background: var(--void);
+    color: var(--star);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── DEEP SPACE BACKGROUND ── */
+  #cosmosCanvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ── PAGES ── */
+  .page {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+
+  #page-entry { display: flex; }
+  #page-map { display: none; }
+
+  /* ── LIQUID RIPPLE REVEAL ── */
+  .reveal-item {
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(0.97);
+    transition: opacity 0.9s cubic-bezier(0.22,1,0.36,1),
+                filter 0.9s cubic-bezier(0.22,1,0.36,1),
+                transform 0.9s cubic-bezier(0.22,1,0.36,1);
+  }
+  .reveal-item.revealed {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+
+  /* ── CONNECTING OVERLAY ── */
+  #connectingOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: radial-gradient(ellipse at center, #070d1e 0%, #03060f 100%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+  }
+  #connectingOverlay.active { display: flex; }
+
+  .conn-ring-wrap {
+    position: relative;
+    width: 64px;
+    height: 64px;
+  }
+  .conn-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid transparent;
+  }
+  .conn-ring-1 {
+    border-top-color: var(--glow);
+    border-right-color: rgba(107,140,255,0.3);
+    animation: spin 1.2s linear infinite;
+  }
+  .conn-ring-2 {
+    inset: 8px;
+    border-bottom-color: rgba(107,140,255,0.5);
+    animation: spin 0.8s linear infinite reverse;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .conn-lines {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .conn-line {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 5px;
+    color: var(--glow);
+    text-transform: uppercase;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .conn-line.sub {
+    font-size: 9px;
+    color: rgba(107,140,255,0.5);
+    letter-spacing: 3px;
+  }
+  .conn-line.visible { opacity: 1; transform: translateY(0); }
+
+  /* ── ENTRY PAGE HERO ── */
+  .welcome-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 8px;
+    color: var(--glow);
+    opacity: 0.6;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  /* Metallic silver gradient title */
+  .welcome-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(2.6rem, 7.5vw, 5.5rem);
+    font-weight: 400;
+    line-height: 1.1;
+    text-align: center;
+    letter-spacing: 3px;
+    margin-bottom: 18px;
+    background: linear-gradient(
+      160deg,
+      #c8d8f8 0%,
+      #e8eeff 20%,
+      #ffffff 38%,
+      #b8d0ff 55%,
+      #d8e8ff 70%,
+      #f0f4ff 85%,
+      #c0d0f0 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 40px rgba(107,140,255,0.45)) drop-shadow(0 0 80px rgba(107,140,255,0.2));
+  }
+
+  .welcome-sub {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.15rem;
+    font-style: italic;
+    font-weight: 300;
+    color: rgba(232,238,255,0.4);
+    text-align: center;
+    margin-bottom: 52px;
+    letter-spacing: 2px;
+  }
+
+  .form-row {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    max-width: 560px;
+    flex-wrap: wrap;
+  }
+
+  .select-wrap {
+    position: relative;
+    flex: 0 0 180px;
+  }
+
+  .select-wrap select {
+    width: 100%;
+    appearance: none;
+    background: rgba(107,140,255,0.06);
+    border: 1px solid rgba(107,140,255,0.25);
+    color: var(--star);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 14px 36px 14px 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .select-wrap select:focus {
+    border-color: var(--glow);
+    box-shadow: 0 0 0 1px rgba(107,140,255,0.2);
+  }
+  .select-wrap select option { background: #0d1535; color: var(--star); }
+  .select-wrap::after {
+    content: '▾';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--glow);
+    font-size: 12px;
+    pointer-events: none;
+  }
+
+  .name-input {
+    flex: 1;
+    min-width: 180px;
+    background: rgba(107,140,255,0.06);
+    border: 1px solid rgba(107,140,255,0.25);
+    color: var(--star);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    padding: 14px 18px;
+    border-radius: 3px;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    letter-spacing: 1px;
+  }
+  .name-input::placeholder { color: rgba(232,238,255,0.25); font-style: italic; }
+  .name-input:focus {
+    border-color: var(--glow);
+    box-shadow: 0 0 0 1px rgba(107,140,255,0.2);
+  }
+
+  .join-btn {
+    width: 100%;
+    max-width: 560px;
+    margin-top: 12px;
+    background: transparent;
+    border: 1px solid rgba(107,140,255,0.45);
+    color: var(--glow);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    padding: 17px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.22,1,0.36,1);
+    position: relative;
+    overflow: hidden;
+  }
+  .join-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(107,140,255,0.08), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+  }
+  .join-btn:hover::before { transform: translateX(100%); }
+  .join-btn:hover {
+    background: rgba(107,140,255,0.08);
+    border-color: var(--glow);
+    box-shadow: 0 0 40px rgba(107,140,255,0.2), inset 0 0 20px rgba(107,140,255,0.05);
+    letter-spacing: 7px;
+  }
+
+  /* ── CONTINENT STATS ── */
+  .continent-stats {
+    width: 100%;
+    max-width: 560px;
+    margin-top: 28px;
+    padding: 18px 24px;
+    border: 1px solid rgba(107,140,255,0.1);
+    border-radius: 3px;
+    background: rgba(7,13,30,0.7);
+    backdrop-filter: blur(10px);
+  }
+  .continent-stats-label {
+    font-size: 8px;
+    letter-spacing: 5px;
+    color: var(--glow);
+    opacity: 0.5;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .continent-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: rgba(232,238,255,0.3);
+  }
+  .continent-row .c-name { flex: 1; text-transform: uppercase; }
+  .continent-row .c-dots { flex: 1; text-align: center; color: rgba(107,140,255,0.15); }
+  .continent-row .c-count { color: var(--glow); font-size: 11px; min-width: 24px; text-align: right; }
+  .continent-row .c-count.zero { color: rgba(107,140,255,0.18); }
+
+  .pioneer-count {
+    margin-top: 28px;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: rgba(232,238,255,0.22);
+    text-transform: uppercase;
+  }
+  .pioneer-count span { color: var(--glow); font-size: 13px; }
+
+  /* ── MAP PAGE ── */
+  #page-map { padding: 0; justify-content: flex-start; }
+
+  .map-header {
+    width: 100%;
+    padding: 28px 40px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(107,140,255,0.1);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .map-header-left { display: flex; flex-direction: column; gap: 6px; }
+  .map-header-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 5px;
+    color: var(--glow);
+    opacity: 0.7;
+    text-transform: uppercase;
+  }
+  .signal-received {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: #7fff7f;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    text-transform: uppercase;
+  }
+  .signal-received.visible { opacity: 0.8; }
+  .welcome-msg {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1rem;
+    font-style: italic;
+    color: rgba(232,238,255,0.5);
+  }
+  .welcome-msg strong { color: var(--warm); font-style: normal; font-weight: 400; }
+
+  /* ── MAP CONTAINER ── */
+  .map-container {
+    width: 100%;
+    max-width: 960px;
+    margin: 36px auto 0;
+    padding: 0 20px;
+    position: relative;
+  }
+  .map-canvas-wrap {
+    position: relative;
+    width: 100%;
+    padding-bottom: 50%;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 0 60px rgba(0,0,0,0.6);
+  }
+  .map-earth-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.55;
+    filter: saturate(0.6) brightness(0.7);
+    z-index: 0;
+  }
+  #worldMap {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  /* ── COUNTRY POPUP ── */
+  .map-popup {
+    position: absolute;
+    z-index: 20;
+    background: rgba(7,13,30,0.95);
+    border: 1px solid rgba(107,140,255,0.3);
+    border-radius: 4px;
+    padding: 14px 18px;
+    min-width: 180px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    backdrop-filter: blur(12px);
+  }
+  .map-popup.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .popup-country {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 4px;
+    color: var(--glow);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .popup-count {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 300;
+    color: var(--star);
+    margin-bottom: 6px;
+  }
+  .popup-count span { font-size: 0.8rem; color: rgba(232,238,255,0.4); vertical-align: middle; }
+  .popup-latest-label {
+    font-size: 8px;
+    letter-spacing: 3px;
+    color: rgba(107,140,255,0.5);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .popup-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.9rem;
+    color: rgba(232,238,255,0.7);
+    padding: 2px 0;
+  }
+  .popup-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    color: rgba(107,140,255,0.4);
+    font-size: 12px;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: color 0.2s;
+  }
+  .popup-close:hover { color: var(--glow); }
+
+  /* ── LIVE ACTIVITY FEED ── */
+  #activityFeed {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+    max-width: 240px;
+  }
+  .feed-item {
+    background: rgba(7,13,30,0.88);
+    border: 1px solid rgba(107,140,255,0.2);
+    border-radius: 3px;
+    padding: 7px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 8.5px;
+    letter-spacing: 1px;
+    color: rgba(232,238,255,0.7);
+    opacity: 0;
+    transform: translateX(20px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    backdrop-filter: blur(8px);
+  }
+  .feed-item.in { opacity: 1; transform: translateX(0); }
+  .feed-item.out { opacity: 0; transform: translateX(20px); }
+  .feed-star { color: var(--warm); margin-right: 4px; }
+
+  /* ── PIONEER WALL ── */
+  .pioneer-wall-section {
+    width: 100%;
+    max-width: 960px;
+    margin: 50px auto 0;
+    padding: 0 20px 80px;
+  }
+  .wall-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(107,140,255,0.15);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .wall-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 6px;
+    color: var(--glow);
+    opacity: 0.6;
+    text-transform: uppercase;
+  }
+  .wall-search {
+    background: rgba(107,140,255,0.05);
+    border: 1px solid rgba(107,140,255,0.18);
+    color: var(--star);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    padding: 7px 14px;
+    border-radius: 2px;
+    outline: none;
+    transition: border-color 0.3s;
+    width: 200px;
+  }
+  .wall-search::placeholder { color: rgba(232,238,255,0.2); }
+  .wall-search:focus { border-color: var(--glow); }
+
+  /* Scrolling wall */
+  .pioneer-scroll-outer {
+    overflow: hidden;
+    position: relative;
+    height: 60px;
+  }
+  .pioneer-scroll-outer::before,
+  .pioneer-scroll-outer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 60px;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .pioneer-scroll-outer::before {
+    left: 0;
+    background: linear-gradient(to right, var(--void), transparent);
+  }
+  .pioneer-scroll-outer::after {
+    right: 0;
+    background: linear-gradient(to left, var(--void), transparent);
+  }
+  .pioneer-scroll-track {
+    display: flex;
+    gap: 10px;
+    width: max-content;
+    animation: scrollWall 40s linear infinite;
+    will-change: transform;
+  }
+  .pioneer-scroll-track:hover { animation-play-state: paused; }
+  @keyframes scrollWall {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* Search results grid (shown when filtering) */
+  .pioneer-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    display: none;
+  }
+  .pioneer-grid.active { display: flex; }
+
+  .pioneer-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 1px solid rgba(107,140,255,0.2);
+    border-radius: 2px;
+    background: rgba(107,140,255,0.04);
+    transition: all 0.3s;
+    animation: fadeUp 0.4s ease both;
+    white-space: nowrap;
+    cursor: default;
+  }
+  .pioneer-tag.new-entry {
+    border-color: rgba(255,217,160,0.55);
+    background: rgba(255,217,160,0.05);
+    box-shadow: 0 0 20px rgba(255,217,160,0.1);
+  }
+  .pioneer-tag:hover {
+    border-color: rgba(107,140,255,0.4);
+    background: rgba(107,140,255,0.08);
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .pioneer-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--glow);
+    box-shadow: 0 0 6px var(--glow);
+    flex-shrink: 0;
+  }
+  .pioneer-dot.warm { background: var(--warm); box-shadow: 0 0 6px var(--warm); }
+  .pioneer-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.95rem;
+    color: rgba(232,238,255,0.8);
+    letter-spacing: 0.5px;
+  }
+  .pioneer-flag { font-size: 0.85rem; opacity: 0.7; }
+
+  .back-btn {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: transparent;
+    border: 1px solid rgba(107,140,255,0.25);
+    color: rgba(232,238,255,0.45);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    padding: 8px 14px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.3s;
+    z-index: 10;
+    display: none;
+  }
+  .back-btn:hover { color: var(--star); border-color: var(--glow); }
+
+  /* ══════════════════════════════════════════════
+     V3 — GLOBAL STATISTICS
+     ══════════════════════════════════════════════ */
+  .global-stats {
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .stat-card {
+    border: 1px solid rgba(107,140,255,0.14);
+    background: rgba(107,140,255,0.03);
+    border-radius: 5px;
+    padding: 20px 18px;
+    text-align: center;
+    backdrop-filter: blur(6px);
+    transition: border-color 0.4s ease, transform 0.4s ease;
+  }
+  .stat-card:hover { border-color: rgba(107,140,255,0.3); transform: translateY(-2px); }
+  .stat-icon { font-size: 15px; margin-bottom: 8px; opacity: 0.8; }
+  .stat-number {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.1rem;
+    font-weight: 300;
+    color: var(--star);
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 3px;
+    color: rgba(232,238,255,0.35);
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  /* ══════════════════════════════════════════════
+     V3 — WALL + LEADERBOARD LAYOUT
+     ══════════════════════════════════════════════ */
+  .wall-leaderboard-row {
+    width: 100%;
+    max-width: 960px;
+    margin: 50px auto 0;
+    padding: 0 20px 80px;
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+  }
+  .wall-leaderboard-row .pioneer-wall-section {
+    flex: 1;
+    margin: 0;
+    padding: 0;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .leaderboard-panel {
+    width: 240px;
+    flex-shrink: 0;
+    border: 1px solid rgba(107,140,255,0.14);
+    background: rgba(7,13,30,0.5);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .leaderboard-toggle {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--glow);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    opacity: 0.75;
+  }
+  .leaderboard-toggle:hover { opacity: 1; }
+  .leaderboard-toggle .lb-arrow { transition: transform 0.35s cubic-bezier(0.22,1,0.36,1); }
+  .leaderboard-panel.collapsed .lb-arrow { transform: rotate(-90deg); }
+  .leaderboard-body {
+    max-height: 420px;
+    overflow: hidden;
+    transition: max-height 0.45s cubic-bezier(0.22,1,0.36,1);
+    padding: 0 16px 16px;
+  }
+  .leaderboard-panel.collapsed .leaderboard-body { max-height: 0; padding-bottom: 0; }
+  .lb-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-top: 1px solid rgba(107,140,255,0.08);
+  }
+  .lb-row:first-child { border-top: none; }
+  .lb-rank {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: rgba(107,140,255,0.4);
+    width: 14px;
+    flex-shrink: 0;
+  }
+  .lb-flag { font-size: 0.95rem; flex-shrink: 0; }
+  .lb-name {
+    flex: 1;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.85rem;
+    color: rgba(232,238,255,0.75);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lb-count { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--glow); }
+  .lb-empty {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.85rem;
+    color: rgba(232,238,255,0.25);
+    padding: 10px 0;
+    text-align: center;
+  }
+
+  /* ══════════════════════════════════════════════
+     V3 — BADGES
+     ══════════════════════════════════════════════ */
+  .badge-founder, .badge-first {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-family: 'Space Mono', monospace;
+    font-size: 6.5px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 20px;
+    margin-left: 6px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .badge-founder {
+    background: rgba(255,217,160,0.12);
+    border: 1px solid rgba(255,217,160,0.4);
+    color: var(--warm);
+  }
+  .badge-first {
+    background: rgba(107,140,255,0.1);
+    border: 1px solid rgba(107,140,255,0.35);
+    color: var(--glow);
+  }
+
+  /* ══════════════════════════════════════════════
+     V3 — PIONEER PROFILE MODAL
+     ══════════════════════════════════════════════ */
+  #profileOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(3,6,15,0.75);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #profileOverlay.active { display: flex; }
+  .profile-card {
+    width: 100%;
+    max-width: 360px;
+    background: linear-gradient(165deg, rgba(13,21,53,0.95), rgba(7,13,30,0.98));
+    border: 1px solid rgba(107,140,255,0.25);
+    border-radius: 8px;
+    padding: 34px 30px 28px;
+    position: relative;
+    box-shadow: 0 0 80px rgba(107,140,255,0.12), 0 20px 60px rgba(0,0,0,0.5);
+    transform: scale(0.94);
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.22,1,0.36,1), opacity 0.4s ease;
+  }
+  #profileOverlay.active .profile-card { transform: scale(1); opacity: 1; }
+  .profile-close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    color: rgba(107,140,255,0.4);
+    cursor: pointer;
+    font-size: 13px;
+    transition: color 0.2s;
+  }
+  .profile-close:hover { color: var(--glow); }
+  .profile-eyebrow {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 5px;
+    color: var(--glow);
+    opacity: 0.6;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  .profile-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem;
+    font-weight: 400;
+    text-align: center;
+    color: var(--star);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .profile-badges { text-align: center; margin-bottom: 20px; min-height: 18px; }
+  .profile-divider { height: 1px; background: rgba(107,140,255,0.12); margin: 0 0 20px; }
+  .profile-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 0;
+    font-family: 'Space Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(107,140,255,0.08);
+  }
+  .profile-field:last-of-type { border-bottom: none; }
+  .profile-field .pf-label { color: rgba(232,238,255,0.35); text-transform: uppercase; letter-spacing: 3px; font-size: 8px; }
+  .profile-field .pf-value { color: rgba(232,238,255,0.85); font-family: 'Cormorant Garamond', serif; font-size: 1rem; letter-spacing: 0.5px; }
+
+  /* ══════════════════════════════════════════════
+     V3 — SHARE
+     ══════════════════════════════════════════════ */
+  .share-block {
+    margin-top: 22px;
+    width: 100%;
+    max-width: 560px;
+    text-align: center;
+  }
+  .share-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 8.5px;
+    letter-spacing: 4px;
+    color: rgba(232,238,255,0.3);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .share-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .share-btn {
+    background: transparent;
+    border: 1px solid rgba(107,140,255,0.22);
+    color: rgba(232,238,255,0.6);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    padding: 9px 15px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .share-btn:hover { border-color: var(--glow); color: var(--star); background: rgba(107,140,255,0.06); }
+
+  /* ══════════════════════════════════════════════
+     V3.1 — HIDDEN DEVELOPER MODE (keyboard-only entry,
+     no visible control anywhere in the UI)
+     ══════════════════════════════════════════════ */
+  #devPanel {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: rgba(2,4,10,0.88);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s cubic-bezier(0.22,1,0.36,1);
+  }
+  #devPanel.active { opacity: 1; pointer-events: auto; }
+  .dev-card {
+    width: 100%;
+    max-width: 420px;
+    background: rgba(10,15,35,0.97);
+    border: 1px solid rgba(255,120,120,0.3);
+    border-radius: 8px;
+    padding: 26px 26px 22px;
+    transform: translateY(14px) scale(0.97);
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.22,1,0.36,1), opacity 0.4s ease;
+  }
+  #devPanel.active .dev-card { transform: translateY(0) scale(1); opacity: 1; }
+  .dev-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 4px;
+    color: #ff8a8a;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .dev-sub {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.8rem;
+    color: rgba(232,238,255,0.35);
+    margin-bottom: 20px;
+  }
+  .dev-row { margin-bottom: 10px; }
+  .dev-btn {
+    width: 100%;
+    text-align: left;
+    background: rgba(107,140,255,0.05);
+    border: 1px solid rgba(107,140,255,0.2);
+    color: var(--star);
+    font-family: 'Space Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing: 1.5px;
+    padding: 12px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  .dev-btn:hover { border-color: var(--glow); background: rgba(107,140,255,0.1); }
+  .dev-btn.danger { border-color: rgba(255,120,120,0.3); color: #ff9a9a; }
+  .dev-btn.danger:hover { border-color: #ff8a8a; background: rgba(255,120,120,0.08); }
+  .dev-status {
+    margin-top: 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 8.5px;
+    letter-spacing: 1px;
+    color: rgba(107,140,255,0.6);
+    min-height: 14px;
+  }
+  .dev-close {
+    display: block;
+    margin: 16px auto 0;
+    background: transparent;
+    border: none;
+    color: rgba(232,238,255,0.35);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    cursor: pointer;
+  }
+  .dev-close:hover { color: var(--star); }
+  #devFileInput { display: none; }
+
+  /* ══════════════════════════════════════════════
+     V3.2 — EXPLORE MODE / SECONDARY BUTTON
+     ══════════════════════════════════════════════ */
+  .explore-btn {
+    margin-top: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: rgba(232,238,255,0.7);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    padding: 14px 28px;
+    border-radius: 30px;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 0 24px rgba(107,140,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
+    transition: all 0.4s cubic-bezier(0.22,1,0.36,1);
+  }
+  .explore-btn:hover {
+    border-color: rgba(107,140,255,0.4);
+    color: var(--star);
+    box-shadow: 0 0 34px rgba(107,140,255,0.18), inset 0 1px 0 rgba(255,255,255,0.1);
+    transform: translateY(-1px);
+  }
+
+  .become-pioneer-fab {
+    position: fixed;
+    bottom: 26px;
+    right: 26px;
+    z-index: 250;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,217,160,0.08);
+    border: 1px solid rgba(255,217,160,0.35);
+    color: var(--warm);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    padding: 13px 20px;
+    border-radius: 30px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    transition: all 0.35s cubic-bezier(0.22,1,0.36,1);
+  }
+  .become-pioneer-fab.shown { display: flex; }
+  .become-pioneer-fab:hover {
+    border-color: var(--warm);
+    background: rgba(255,217,160,0.14);
+    transform: translateY(-2px);
+  }
+
+  /* ══════════════════════════════════════════════
+     V3.2 — WELCOME BACK PANEL (returning pioneer)
+     ══════════════════════════════════════════════ */
+  .welcome-back-panel {
+    position: fixed;
+    top: 88px;
+    right: 22px;
+    z-index: 150;
+    width: 230px;
+    background: rgba(7,13,30,0.72);
+    border: 1px solid rgba(107,140,255,0.2);
+    border-radius: 6px;
+    padding: 16px 18px;
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22,1,0.36,1);
+  }
+  .welcome-back-panel.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .wb-greeting {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.05rem;
+    color: var(--star);
+    margin-bottom: 10px;
+  }
+  .wb-field {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Space Mono', monospace;
+    font-size: 8.5px;
+    letter-spacing: 0.5px;
+    color: rgba(232,238,255,0.5);
+    padding: 4px 0;
+    border-top: 1px solid rgba(107,140,255,0.08);
+  }
+  .wb-field:first-of-type { border-top: none; }
+  .wb-field span:last-child { color: rgba(232,238,255,0.8); }
+  .wb-badges { margin-top: 8px; }
+  .wb-notyou {
+    margin-top: 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: rgba(232,238,255,0.3);
+    text-decoration: underline;
+    cursor: pointer;
+    text-align: right;
+  }
+  .wb-notyou:hover { color: var(--glow); }
+
+  /* ══════════════════════════════════════════════
+     V3.2 — SIMPLE CONFIRM DIALOGS
+     ══════════════════════════════════════════════ */
+  .simple-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    background: rgba(2,4,10,0.8);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .simple-dialog.active { opacity: 1; pointer-events: auto; }
+  .simple-dialog-card {
+    width: 100%;
+    max-width: 340px;
+    background: rgba(10,15,35,0.97);
+    border: 1px solid rgba(107,140,255,0.25);
+    border-radius: 8px;
+    padding: 26px 24px 22px;
+    text-align: center;
+    transform: scale(0.95);
+    transition: transform 0.35s cubic-bezier(0.22,1,0.36,1);
+  }
+  .simple-dialog.active .simple-dialog-card { transform: scale(1); }
+  .simple-dialog-msg {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.05rem;
+    color: rgba(232,238,255,0.85);
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+  .simple-dialog-btns { display: flex; flex-direction: column; gap: 8px; }
+  .simple-dialog-btn {
+    background: rgba(107,140,255,0.06);
+    border: 1px solid rgba(107,140,255,0.22);
+    color: var(--star);
+    font-family: 'Space Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing: 1.5px;
+    padding: 11px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  .simple-dialog-btn:hover { border-color: var(--glow); background: rgba(107,140,255,0.12); }
+  .simple-dialog-btn.muted { color: rgba(232,238,255,0.4); border-color: rgba(232,238,255,0.12); background: transparent; }
+  .simple-dialog-btn.muted:hover { color: rgba(232,238,255,0.7); border-color: rgba(232,238,255,0.25); background: transparent; }
+
+  .profile-notyou {
+    margin-top: 16px;
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: rgba(232,238,255,0.3);
+    text-decoration: underline;
+    cursor: pointer;
+    display: none;
+  }
+  .profile-notyou:hover { color: var(--glow); }
+
+  @media (max-width: 720px) {
+    .wall-leaderboard-row { flex-direction: column; }
+    .leaderboard-panel { width: 100%; }
+    .global-stats { grid-template-columns: 1fr; }
+    .welcome-back-panel { top: auto; bottom: 90px; right: 14px; left: 14px; width: auto; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="cosmosCanvas"></canvas>
+<button class="back-btn" id="backBtn" onclick="goBack()">← BACK</button>
+
+<!-- CONNECTING OVERLAY -->
+<div id="connectingOverlay">
+  <div class="conn-ring-wrap">
+    <div class="conn-ring conn-ring-1"></div>
+    <div class="conn-ring conn-ring-2"></div>
+  </div>
+  <div class="conn-lines">
+    <div class="conn-line" id="connLine1">Connecting to Global Constellation...</div>
+    <div class="conn-line sub" id="connLine2">Searching your signal...</div>
+    <div class="conn-line sub" id="connLine3">Signal received.</div>
+  </div>
+</div>
+
+<!-- ENTRY PAGE -->
+<div class="page" id="page-entry">
+  <div class="welcome-label reveal-item">The Universe Awaits</div>
+  <h1 class="welcome-title reveal-item">Welcome To Join<br>The Pioneer Plan</h1>
+  <p class="welcome-sub reveal-item">Leave your mark among the stars. You are not alone.</p>
+
+  <div class="form-row reveal-item">
+    <div class="select-wrap">
+      <select id="countrySelect">
+        <option value="">— Country —</option>
+        <option value="US" data-lat="38" data-lng="-97" data-flag="🇺🇸" data-continent="NA">United States</option>
+        <option value="CA" data-lat="56" data-lng="-96" data-flag="🇨🇦" data-continent="NA">Canada</option>
+        <option value="GB" data-lat="55" data-lng="-3" data-flag="🇬🇧" data-continent="EU">United Kingdom</option>
+        <option value="AU" data-lat="-25" data-lng="133" data-flag="🇦🇺" data-continent="OC">Australia</option>
+        <option value="NZ" data-lat="-41" data-lng="174" data-flag="🇳🇿" data-continent="OC">New Zealand</option>
+        <option value="JP" data-lat="36" data-lng="138" data-flag="🇯🇵" data-continent="AS">Japan</option>
+        <option value="KR" data-lat="36" data-lng="128" data-flag="🇰🇷" data-continent="AS">South Korea</option>
+        <option value="CN" data-lat="35" data-lng="105" data-flag="🇨🇳" data-continent="AS">China</option>
+        <option value="TW" data-lat="23.5" data-lng="121" data-flag="🇹🇼" data-continent="AS">Taiwan</option>
+        <option value="HK" data-lat="22.3" data-lng="114.2" data-flag="🇭🇰" data-continent="AS">Hong Kong</option>
+        <option value="SG" data-lat="1.3" data-lng="103.8" data-flag="🇸🇬" data-continent="AS">Singapore</option>
+        <option value="MY" data-lat="4" data-lng="109" data-flag="🇲🇾" data-continent="AS">Malaysia</option>
+        <option value="TH" data-lat="15" data-lng="101" data-flag="🇹🇭" data-continent="AS">Thailand</option>
+        <option value="VN" data-lat="16" data-lng="108" data-flag="🇻🇳" data-continent="AS">Vietnam</option>
+        <option value="ID" data-lat="-5" data-lng="120" data-flag="🇮🇩" data-continent="AS">Indonesia</option>
+        <option value="PH" data-lat="13" data-lng="122" data-flag="🇵🇭" data-continent="AS">Philippines</option>
+        <option value="IN" data-lat="20" data-lng="77" data-flag="🇮🇳" data-continent="AS">India</option>
+        <option value="DE" data-lat="51" data-lng="10" data-flag="🇩🇪" data-continent="EU">Germany</option>
+        <option value="FR" data-lat="46" data-lng="2" data-flag="🇫🇷" data-continent="EU">France</option>
+        <option value="ES" data-lat="40" data-lng="-4" data-flag="🇪🇸" data-continent="EU">Spain</option>
+        <option value="IT" data-lat="42" data-lng="12" data-flag="🇮🇹" data-continent="EU">Italy</option>
+        <option value="NL" data-lat="52" data-lng="5" data-flag="🇳🇱" data-continent="EU">Netherlands</option>
+        <option value="SE" data-lat="60" data-lng="15" data-flag="🇸🇪" data-continent="EU">Sweden</option>
+        <option value="NO" data-lat="64" data-lng="16" data-flag="🇳🇴" data-continent="EU">Norway</option>
+        <option value="DK" data-lat="56" data-lng="10" data-flag="🇩🇰" data-continent="EU">Denmark</option>
+        <option value="FI" data-lat="64" data-lng="26" data-flag="🇫🇮" data-continent="EU">Finland</option>
+        <option value="PL" data-lat="52" data-lng="20" data-flag="🇵🇱" data-continent="EU">Poland</option>
+        <option value="RU" data-lat="60" data-lng="90" data-flag="🇷🇺" data-continent="EU">Russia</option>
+        <option value="BR" data-lat="-15" data-lng="-47" data-flag="🇧🇷" data-continent="SA">Brazil</option>
+        <option value="MX" data-lat="23" data-lng="-102" data-flag="🇲🇽" data-continent="NA">Mexico</option>
+        <option value="AR" data-lat="-38" data-lng="-63" data-flag="🇦🇷" data-continent="SA">Argentina</option>
+        <option value="CL" data-lat="-33" data-lng="-70" data-flag="🇨🇱" data-continent="SA">Chile</option>
+        <option value="CO" data-lat="4" data-lng="-74" data-flag="🇨🇴" data-continent="SA">Colombia</option>
+        <option value="PE" data-lat="-12" data-lng="-77" data-flag="🇵🇪" data-continent="SA">Peru</option>
+        <option value="TR" data-lat="39" data-lng="35" data-flag="🇹🇷" data-continent="AS">Turkey</option>
+        <option value="SA" data-lat="24" data-lng="45" data-flag="🇸🇦" data-continent="AS">Saudi Arabia</option>
+        <option value="AE" data-lat="24" data-lng="54" data-flag="🇦🇪" data-continent="AS">United Arab Emirates</option>
+        <option value="IL" data-lat="31.5" data-lng="35" data-flag="🇮🇱" data-continent="AS">Israel</option>
+        <option value="ZA" data-lat="-29" data-lng="25" data-flag="🇿🇦" data-continent="AF">South Africa</option>
+        <option value="EG" data-lat="27" data-lng="30" data-flag="🇪🇬" data-continent="AF">Egypt</option>
+        <option value="NG" data-lat="9" data-lng="8" data-flag="🇳🇬" data-continent="AF">Nigeria</option>
+        <option value="KE" data-lat="-1" data-lng="37" data-flag="🇰🇪" data-continent="AF">Kenya</option>
+        <option value="OTHER" data-lat="0" data-lng="0" data-flag="🌍" data-continent="">Other</option>
+      </select>
+    </div>
+    <input class="name-input" id="nameInput" type="text" placeholder="Your name, pioneer..." maxlength="30"/>
+  </div>
+  <button class="join-btn reveal-item" onclick="joinPlan()">⭐ JOIN THE CONSTELLATION</button>
+  <button class="explore-btn reveal-item" onclick="enterExploreMode()">🌍 EXPLORE THE CONSTELLATION</button>
+
+  <div class="continent-stats reveal-item">
+    <div class="continent-stats-label">Continents Lit Up</div>
+    <div class="continent-row"><span class="c-name">Asia</span><span class="c-dots">· · · · · · · ·</span><span class="c-count" id="stat-AS">0</span></div>
+    <div class="continent-row"><span class="c-name">Europe</span><span class="c-dots">· · · · · · · ·</span><span class="c-count" id="stat-EU">0</span></div>
+    <div class="continent-row"><span class="c-name">North America</span><span class="c-dots">· · · · · ·</span><span class="c-count" id="stat-NA">0</span></div>
+    <div class="continent-row"><span class="c-name">South America</span><span class="c-dots">· · · · · ·</span><span class="c-count" id="stat-SA">0</span></div>
+    <div class="continent-row"><span class="c-name">Africa</span><span class="c-dots">· · · · · · · ·</span><span class="c-count" id="stat-AF">0</span></div>
+    <div class="continent-row"><span class="c-name">Oceania</span><span class="c-dots">· · · · · · · ·</span><span class="c-count" id="stat-OC">0</span></div>
+  </div>
+
+  <div class="pioneer-count reveal-item">Pioneers so far: <span id="countDisplay">0</span></div>
+</div>
+
+<!-- MAP PAGE -->
+<div class="page" id="page-map">
+  <div class="map-header">
+    <div class="map-header-left">
+      <div class="map-header-title">Pioneer Star Map</div>
+      <div class="signal-received" id="signalReceived">✓ SIGNAL RECEIVED</div>
+    </div>
+    <div class="welcome-msg" id="welcomeMsg"></div>
+  </div>
+
+  <div class="welcome-back-panel" id="welcomeBackPanel"></div>
+
+  <div class="global-stats">
+    <div class="stat-card">
+      <div class="stat-icon">🌍</div>
+      <div class="stat-number" id="statCountries">0</div>
+      <div class="stat-label">Countries Lit</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">⭐</div>
+      <div class="stat-number" id="statTotal">0</div>
+      <div class="stat-label">Total Pioneers</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">✨</div>
+      <div class="stat-number" id="statToday">0</div>
+      <div class="stat-label">Joined Today</div>
+    </div>
+  </div>
+
+  <div class="share-block" id="shareBlock" style="display:none;">
+    <div class="share-title">Share Your Pioneer Status</div>
+    <div class="share-btns">
+      <button class="share-btn" onclick="shareVia('copy')">Copy Link</button>
+      <button class="share-btn" onclick="shareVia('x')">X</button>
+      <button class="share-btn" onclick="shareVia('reddit')">Reddit</button>
+      <button class="share-btn" onclick="shareVia('facebook')">Facebook</button>
+      <button class="share-btn" onclick="shareVia('discord')">Discord</button>
+    </div>
+  </div>
+
+  <div class="map-container">
+    <div class="map-canvas-wrap" id="mapWrap">
+      <img class="map-earth-bg" id="earthBg"
+        src="https://eoimages.gsfc.nasa.gov/images/imagerecords/55000/55167/earth_lights_lrg.jpg"
+        alt="Earth at Night"
+        onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/The_earth_at_night.jpg/1280px-The_earth_at_night.jpg'"
+      />
+      <canvas id="worldMap"></canvas>
+      <!-- Live feed -->
+      <div id="activityFeed"></div>
+      <!-- Country popup -->
+      <div class="map-popup" id="mapPopup">
+        <span class="popup-close" onclick="closePopup()">✕</span>
+        <div class="popup-country" id="popupCountry"></div>
+        <div class="popup-count" id="popupCount"></div>
+        <div class="popup-latest-label">Latest arrivals</div>
+        <div id="popupNames"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wall-leaderboard-row">
+    <div class="pioneer-wall-section">
+      <div class="wall-header">
+        <div class="wall-label">Pioneer Wall — Those Who Came Before</div>
+        <input class="wall-search" id="wallSearch" type="text" placeholder="Search Pioneer..." oninput="filterWall(this.value)"/>
+      </div>
+      <!-- Infinite scroll strip (shown when not searching) -->
+      <div class="pioneer-scroll-outer" id="scrollOuter">
+        <div class="pioneer-scroll-track" id="scrollTrack"></div>
+      </div>
+      <!-- Search result grid -->
+      <div class="pioneer-grid" id="pioneerGrid"></div>
+    </div>
+
+    <div class="leaderboard-panel" id="leaderboardPanel">
+      <button class="leaderboard-toggle" onclick="toggleLeaderboard()">
+        <span>Top Pioneer Countries</span>
+        <span class="lb-arrow">▾</span>
+      </button>
+      <div class="leaderboard-body" id="leaderboardBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PIONEER PROFILE MODAL -->
+<div id="profileOverlay" onclick="if(event.target===this) closeProfile()">
+  <div class="profile-card">
+    <span class="profile-close" onclick="closeProfile()">✕</span>
+    <div class="profile-eyebrow">⭐ Pioneer Profile</div>
+    <div class="profile-name" id="profileName"></div>
+    <div class="profile-badges" id="profileBadges"></div>
+    <div class="profile-divider"></div>
+    <div class="profile-field"><span class="pf-label">Country</span><span class="pf-value" id="profileCountry"></span></div>
+    <div class="profile-field"><span class="pf-label">Join Date</span><span class="pf-value" id="profileDate"></span></div>
+    <div class="profile-field"><span class="pf-label">Pioneer ID</span><span class="pf-value" id="profileId"></span></div>
+    <div class="profile-notyou" id="profileNotYou" onclick="promptRemoveIdentity()">Not you?</div>
+  </div>
+</div>
+
+<!-- EXPLORE MODE — floating return-to-registration button -->
+<button id="becomePioneerFab" class="become-pioneer-fab" onclick="exitExploreToLanding()">⭐ Become a Pioneer</button>
+
+<!-- ALREADY A PIONEER DIALOG -->
+<div class="simple-dialog" id="alreadyPioneerDialog" onclick="if(event.target===this) closeAlreadyPioneerDialog()">
+  <div class="simple-dialog-card">
+    <div class="simple-dialog-msg">You are already a Pioneer.</div>
+    <div class="simple-dialog-btns">
+      <button class="simple-dialog-btn" onclick="alreadyDialogContinueExploring()">Continue Exploring</button>
+      <button class="simple-dialog-btn" onclick="alreadyDialogViewProfile()">View My Profile</button>
+      <button class="simple-dialog-btn muted" onclick="closeAlreadyPioneerDialog()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- REMOVE LOCAL IDENTITY DIALOG ("Not you?") -->
+<div class="simple-dialog" id="removeIdentityDialog" onclick="if(event.target===this) closeRemoveIdentityDialog()">
+  <div class="simple-dialog-card">
+    <div class="simple-dialog-msg">This will remove the current local Pioneer identity from this browser.</div>
+    <div class="simple-dialog-btns">
+      <button class="simple-dialog-btn" onclick="confirmRemoveIdentity()">Continue</button>
+      <button class="simple-dialog-btn muted" onclick="closeRemoveIdentityDialog()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- DEVELOPER MODE PANEL — hidden; toggled only via Ctrl/Cmd+Alt+D -->
+<div id="devPanel" onclick="if(event.target===this) toggleDevPanel(false)">
+  <div class="dev-card">
+    <div class="dev-title">Developer Mode</div>
+    <div class="dev-sub">Demo &amp; testing tools — hidden outside development</div>
+    <div class="dev-row"><button class="dev-btn danger" onclick="devResetAll()">Reset All Pioneer Data</button></div>
+    <div class="dev-row"><button class="dev-btn" onclick="devGenerateDemo()">Generate Demo Data (50–100 pioneers)</button></div>
+    <div class="dev-row"><button class="dev-btn" onclick="devExportData()">Export Pioneer Data (JSON)</button></div>
+    <div class="dev-row"><button class="dev-btn" onclick="document.getElementById('devFileInput').click()">Import Pioneer Data (JSON)</button></div>
+    <input type="file" id="devFileInput" accept="application/json" onchange="devImportData(this.files[0])"/>
+    <div class="dev-status" id="devStatus"></div>
+    <button class="dev-close" onclick="toggleDevPanel(false)">Close</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+// COSMOS BACKGROUND — Milky Way + nebula + stars + shooting stars
+// ════════════════════════════════════════════════
+const cosCanvas = document.getElementById('cosmosCanvas');
+const cosCtx = cosCanvas.getContext('2d');
+
+let bgStars = [], nebulas = [], shootingStars = [];
+
+function resizeCosmos() {
+  cosCanvas.width = window.innerWidth;
+  cosCanvas.height = window.innerHeight;
+  initCosmos();
+}
+
+function initCosmos() {
+  const W = cosCanvas.width, H = cosCanvas.height;
+
+  // Stars: small, medium, large with different colors
+  bgStars = [];
+  for (let i = 0; i < 600; i++) {
+    const type = Math.random();
+    bgStars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: type < 0.7 ? Math.random() * 0.8 + 0.2 : Math.random() * 1.5 + 0.8,
+      phase: Math.random() * Math.PI * 2,
+      speed: Math.random() * 0.004 + 0.001,
+      color: type < 0.5 ? [200,215,255] : type < 0.75 ? [255,240,210] : [180,200,255],
+    });
+  }
+
+  // Nebula clouds
+  nebulas = [];
+  const nebulaColors = [
+    [40,60,140], [80,30,100], [20,80,120], [60,40,100], [100,60,40]
+  ];
+  for (let i = 0; i < 8; i++) {
+    nebulas.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      rx: 80 + Math.random() * 200,
+      ry: 40 + Math.random() * 100,
+      angle: Math.random() * Math.PI,
+      alpha: 0.04 + Math.random() * 0.08,
+      color: nebulaColors[Math.floor(Math.random() * nebulaColors.length)],
+    });
+  }
+}
+
+function spawnShootingStar() {
+  const W = cosCanvas.width, H = cosCanvas.height;
+  shootingStars.push({
+    x: Math.random() * W * 0.7,
+    y: Math.random() * H * 0.5,
+    len: 80 + Math.random() * 120,
+    speed: 4 + Math.random() * 4,
+    alpha: 1,
+    angle: Math.PI / 5 + (Math.random() - 0.5) * 0.3,
+    life: 1,
+  });
+}
+
+let lastShoot = 0;
+function drawCosmos(ts) {
+  const W = cosCanvas.width, H = cosCanvas.height;
+  cosCtx.clearRect(0, 0, W, H);
+
+  // Deep space gradient
+  const bg = cosCtx.createRadialGradient(W*0.5, H*0.4, 0, W*0.5, H*0.5, Math.max(W,H)*0.8);
+  bg.addColorStop(0, '#0a0f25');
+  bg.addColorStop(0.4, '#06091a');
+  bg.addColorStop(1, '#03060f');
+  cosCtx.fillStyle = bg;
+  cosCtx.fillRect(0, 0, W, H);
+
+  // Milky Way band
+  const mw = cosCtx.createLinearGradient(0, H*0.3, W, H*0.7);
+  mw.addColorStop(0, 'rgba(60,80,160,0)');
+  mw.addColorStop(0.3, 'rgba(60,80,160,0.07)');
+  mw.addColorStop(0.5, 'rgba(80,60,120,0.1)');
+  mw.addColorStop(0.7, 'rgba(60,80,160,0.07)');
+  mw.addColorStop(1, 'rgba(60,80,160,0)');
+  cosCtx.save();
+  cosCtx.translate(W/2, H/2);
+  cosCtx.rotate(-0.25);
+  cosCtx.fillStyle = mw;
+  cosCtx.fillRect(-W, -H*1.5, W*2, H*3);
+  cosCtx.restore();
+
+  // Nebulas
+  nebulas.forEach(n => {
+    cosCtx.save();
+    cosCtx.translate(n.x, n.y);
+    cosCtx.rotate(n.angle);
+    const grd = cosCtx.createRadialGradient(0, 0, 0, 0, 0, n.rx);
+    grd.addColorStop(0, `rgba(${n.color[0]},${n.color[1]},${n.color[2]},${n.alpha})`);
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    cosCtx.scale(1, n.ry / n.rx);
+    cosCtx.beginPath();
+    cosCtx.arc(0, 0, n.rx, 0, Math.PI * 2);
+    cosCtx.fillStyle = grd;
+    cosCtx.fill();
+    cosCtx.restore();
+  });
+
+  // Stars
+  const t = ts * 0.001;
+  bgStars.forEach(s => {
+    const alpha = 0.3 + 0.55 * Math.abs(Math.sin(t * s.speed * 30 + s.phase));
+    cosCtx.beginPath();
+    cosCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    cosCtx.fillStyle = `rgba(${s.color[0]},${s.color[1]},${s.color[2]},${alpha})`;
+    cosCtx.fill();
+    // Glow for larger stars
+    if (s.r > 1.2) {
+      const g = cosCtx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 5);
+      g.addColorStop(0, `rgba(${s.color[0]},${s.color[1]},${s.color[2]},${alpha * 0.3})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      cosCtx.beginPath();
+      cosCtx.arc(s.x, s.y, s.r * 5, 0, Math.PI * 2);
+      cosCtx.fillStyle = g;
+      cosCtx.fill();
+    }
+  });
+
+  // Shooting stars
+  if (ts - lastShoot > 4000 + Math.random() * 5000) {
+    spawnShootingStar();
+    lastShoot = ts;
+  }
+  shootingStars = shootingStars.filter(ss => ss.life > 0);
+  shootingStars.forEach(ss => {
+    const dx = Math.cos(ss.angle) * ss.len * ss.life;
+    const dy = Math.sin(ss.angle) * ss.len * ss.life;
+    const grad = cosCtx.createLinearGradient(ss.x, ss.y, ss.x - dx, ss.y - dy);
+    grad.addColorStop(0, `rgba(255,255,255,${ss.alpha * ss.life})`);
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    cosCtx.beginPath();
+    cosCtx.moveTo(ss.x, ss.y);
+    cosCtx.lineTo(ss.x - dx, ss.y - dy);
+    cosCtx.strokeStyle = grad;
+    cosCtx.lineWidth = 1.5;
+    cosCtx.stroke();
+    ss.x += Math.cos(ss.angle) * ss.speed;
+    ss.y += Math.sin(ss.angle) * ss.speed;
+    ss.life -= 0.018;
+  });
+
+  requestAnimationFrame(drawCosmos);
+}
+
+resizeCosmos();
+requestAnimationFrame(drawCosmos);
+window.addEventListener('resize', resizeCosmos);
+
+// ════════════════════════════════════════════════
+// LIQUID RIPPLE REVEAL
+// ════════════════════════════════════════════════
+function doReveal() {
+  const items = document.querySelectorAll('.reveal-item');
+  items.forEach((el, i) => {
+    setTimeout(() => el.classList.add('revealed'), 120 + i * 130);
+  });
+}
+window.addEventListener('load', () => setTimeout(doReveal, 100));
+
+// ════════════════════════════════════════════════
+// DATA STORE
+// ════════════════════════════════════════════════
+// V3 one-time reset: wipe any V2 data so the registry starts empty.
+try {
+  if (!localStorage.getItem('pioneer-wall-v3-reset-done')) {
+    localStorage.removeItem('pioneer-wall-data');
+    localStorage.setItem('pioneer-wall-v3-reset-done', '1');
+  }
+} catch(e) {}
+
+let pioneers = [];
+try {
+  const stored = localStorage.getItem('pioneer-wall-data');
+  if (stored) pioneers = JSON.parse(stored);
+} catch(e) {}
+
+function savePioneers() {
+  try { localStorage.setItem('pioneer-wall-data', JSON.stringify(pioneers)); } catch(e) {}
+}
+
+function updateCount() {
+  document.getElementById('countDisplay').textContent = pioneers.length;
+}
+
+// Continent stats
+const isoContinent = {};
+document.querySelectorAll('#countrySelect option').forEach(opt => {
+  if (opt.value && opt.dataset.continent) isoContinent[opt.value] = opt.dataset.continent;
+});
+
+function updateContinentStats() {
+  const counts = { AS:0, EU:0, NA:0, SA:0, AF:0, OC:0 };
+  pioneers.forEach(p => { if (p.continent && counts[p.continent] !== undefined) counts[p.continent]++; });
+  Object.entries(counts).forEach(([k, v]) => {
+    const el = document.getElementById('stat-' + k);
+    if (el) { el.textContent = v; el.className = 'c-count' + (v===0?' zero':''); }
+  });
+}
+
+updateCount();
+updateContinentStats();
+
+// ════════════════════════════════════════════════
+// WORLD MAP — canvas renderer
+// ════════════════════════════════════════════════
+const mapCanvas = document.getElementById('worldMap');
+const mapCtx = mapCanvas.getContext('2d');
+
+let newEntry = false, currentUser = null, pulseStartTime = null, animFrameId = null;
+let appMode = 'landing'; // 'landing' | 'explore' | 'pioneer'
+let myProfile = null;    // local Pioneer identity, persisted separately from the registry
+
+// Zoom state
+let zoom = 1, panX = 0, panY = 0;
+let isDragging = false, dragStart = null;
+
+function latLngToXY(lat, lng, w, h) {
+  const x = (lng + 180) / 360 * w;
+  const y = (90 - lat) / 180 * h;
+  return [x * zoom + panX, y * zoom + panY];
+}
+
+function xyToLatLng(px, py, w, h) {
+  const nx = (px - panX) / zoom / w;
+  const ny = (py - panY) / zoom / h;
+  return [(0.5 - ny) * 180, (nx - 0.5) * 360];
+}
+
+// Pioneer hover tracking for popup
+let hoveredCountry = null;
+
+mapCanvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = mapCanvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (mapCanvas.width / rect.width);
+  const my = (e.clientY - rect.top) * (mapCanvas.height / rect.height);
+  const factor = e.deltaY < 0 ? 1.15 : 0.88;
+  const newZoom = Math.min(8, Math.max(1, zoom * factor));
+  panX = mx - (mx - panX) * (newZoom / zoom);
+  panY = my - (my - panY) * (newZoom / zoom);
+  zoom = newZoom;
+}, { passive: false });
+
+mapCanvas.addEventListener('mousedown', e => {
+  isDragging = true;
+  const rect = mapCanvas.getBoundingClientRect();
+  dragStart = { x: e.clientX, y: e.clientY, px: panX, py: panY };
+});
+mapCanvas.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - dragStart.x;
+  const dy = e.clientY - dragStart.y;
+  panX = dragStart.px + dx;
+  panY = dragStart.py + dy;
+});
+mapCanvas.addEventListener('mouseup', () => isDragging = false);
+mapCanvas.addEventListener('mouseleave', () => isDragging = false);
+
+// Touch
+let lastTouchDist = null;
+mapCanvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    lastTouchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  } else {
+    const t = e.touches[0];
+    dragStart = { x: t.clientX, y: t.clientY, px: panX, py: panY };
+    isDragging = true;
+  }
+}, { passive: true });
+mapCanvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    if (lastTouchDist) {
+      const factor = dist / lastTouchDist;
+      zoom = Math.min(8, Math.max(1, zoom * factor));
+    }
+    lastTouchDist = dist;
+  } else if (isDragging) {
+    const t = e.touches[0];
+    panX = dragStart.px + (t.clientX - dragStart.x);
+    panY = dragStart.py + (t.clientY - dragStart.y);
+  }
+}, { passive: false });
+mapCanvas.addEventListener('touchend', () => { isDragging = false; lastTouchDist = null; });
+
+// Click on map → country popup
+mapCanvas.addEventListener('click', e => {
+  if (isDragging) return;
+  const rect = mapCanvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (mapCanvas.width / rect.width);
+  const my = (e.clientY - rect.top) * (mapCanvas.height / rect.height);
+  checkPioneerClick(mx, my, e.clientX - rect.left, e.clientY - rect.top);
+});
+
+// Pioneer dot hit test radius
+const DOT_HIT = 14;
+
+function checkPioneerClick(mx, my, dispX, dispY) {
+  const w = mapCanvas.width, h = mapCanvas.height;
+  // Find closest pioneer dot
+  let hit = null, bestDist = DOT_HIT * 2;
+  pioneers.forEach(p => {
+    if (!p.lat && !p.lng) return;
+    const [px, py] = latLngToXY(p.lat, p.lng, w, h);
+    const d = Math.hypot(mx - px, my - py);
+    if (d < DOT_HIT && d < bestDist) { bestDist = d; hit = p; }
+  });
+  if (hit) {
+    showCountryPopup(hit.country, hit.flag, dispX, dispY);
+  } else {
+    closePopup();
+  }
+}
+
+function showCountryPopup(country, flag, x, y) {
+  // Gather all pioneers from that country
+  const group = pioneers.filter(p => p.country === country);
+  const latest = group.slice(-3).reverse();
+  const popup = document.getElementById('mapPopup');
+  document.getElementById('popupCountry').textContent = (flag||'') + '  ' + country;
+  document.getElementById('popupCount').innerHTML = `${group.length} <span>Pioneer${group.length!==1?'s':'s'}</span>`;
+  document.getElementById('popupNames').innerHTML = latest.map(p => `<div class="popup-name" style="cursor:pointer;" onclick="openProfile(pioneers.find(x=>x.id==='${p.id}'))">${p.name}${badgeHTML(p, true)}</div>`).join('');
+  // Position
+  const wrap = document.getElementById('mapWrap');
+  const wRect = wrap.getBoundingClientRect();
+  const pw = 200;
+  let left = x + 14;
+  if (left + pw > wrap.offsetWidth - 10) left = x - pw - 14;
+  popup.style.left = left + 'px';
+  popup.style.top = Math.max(10, y - 20) + 'px';
+  popup.classList.add('visible');
+}
+
+function closePopup() {
+  document.getElementById('mapPopup').classList.remove('visible');
+}
+
+function drawWorldMap(timestamp) {
+  const w = mapCanvas.width, h = mapCanvas.height;
+  const t = timestamp || performance.now();
+
+  mapCtx.clearRect(0, 0, w, h);
+
+  // Dark overlay
+  mapCtx.fillStyle = 'rgba(3,6,15,0.32)';
+  mapCtx.fillRect(0, 0, w, h);
+
+  // Grid lines (subtle, zoom-aware)
+  mapCtx.strokeStyle = 'rgba(107,140,255,0.045)';
+  mapCtx.lineWidth = 0.5;
+  for (let lat = -90; lat <= 90; lat += 30) {
+    const [, y] = latLngToXY(lat, 0, w, h);
+    mapCtx.beginPath(); mapCtx.moveTo(0, y); mapCtx.lineTo(w, y); mapCtx.stroke();
+  }
+  for (let lng = -180; lng <= 180; lng += 30) {
+    const [x] = latLngToXY(0, lng, w, h);
+    mapCtx.beginPath(); mapCtx.moveTo(x, 0); mapCtx.lineTo(x, h); mapCtx.stroke();
+  }
+
+  // Breathing effect for all dots
+  const breath = 0.7 + 0.3 * Math.sin(t * 0.0015);
+
+  // Existing pioneer dots
+  pioneers.forEach((p, i) => {
+    if (!p.lat && !p.lng) return;
+    const isNewest = (i === pioneers.length - 1) && newEntry;
+    if (isNewest) return;
+
+    const jitter  = (Math.sin(i * 7.3) - 0.5) * 1.8;
+    const jitter2 = (Math.cos(i * 3.7) - 0.5) * 1.8;
+    const [x, y] = latLngToXY(p.lat + jitter*0.3, p.lng + jitter2*0.3, w, h);
+
+    if (x < -20 || x > w+20 || y < -20 || y > h+20) return; // clip
+
+    const grd = mapCtx.createRadialGradient(x, y, 0, x, y, 11 * breath);
+    grd.addColorStop(0,   'rgba(140,180,255,0.58)');
+    grd.addColorStop(0.35,'rgba(100,150,255,0.2)');
+    grd.addColorStop(1,   'rgba(70,120,255,0)');
+    mapCtx.beginPath();
+    mapCtx.arc(x, y, 11 * breath, 0, Math.PI * 2);
+    mapCtx.fillStyle = grd;
+    mapCtx.fill();
+
+    mapCtx.beginPath();
+    mapCtx.arc(x, y, 2, 0, Math.PI * 2);
+    mapCtx.fillStyle = '#c8daff';
+    mapCtx.shadowColor = '#8ab0ff';
+    mapCtx.shadowBlur = 10;
+    mapCtx.fill();
+    mapCtx.shadowBlur = 0;
+  });
+
+  // New user golden pulse
+  if (newEntry && currentUser && currentUser.lat && currentUser.lng) {
+    const [x, y] = latLngToXY(currentUser.lat, currentUser.lng, w, h);
+    if (pulseStartTime === null) pulseStartTime = t;
+    const elapsed = (t - pulseStartTime) / 1000;
+
+    for (let ring = 0; ring < 2; ring++) {
+      const offset = ring * 0.8;
+      const cycle = ((elapsed + offset) % 2.2) / 2.2;
+      const maxR = Math.min(w, h) * 0.09;
+      mapCtx.beginPath();
+      mapCtx.arc(x, y, cycle * maxR, 0, Math.PI * 2);
+      mapCtx.strokeStyle = `rgba(255,210,120,${(1 - cycle) * (ring===0?0.75:0.45)})`;
+      mapCtx.lineWidth = ring===0 ? 1.5 : 1;
+      mapCtx.stroke();
+    }
+
+    const gg = mapCtx.createRadialGradient(x, y, 0, x, y, 20);
+    gg.addColorStop(0, 'rgba(255,225,140,0.7)');
+    gg.addColorStop(0.4,'rgba(255,190,80,0.22)');
+    gg.addColorStop(1,  'rgba(255,160,40,0)');
+    mapCtx.beginPath();
+    mapCtx.arc(x, y, 20, 0, Math.PI * 2);
+    mapCtx.fillStyle = gg;
+    mapCtx.fill();
+
+    mapCtx.beginPath();
+    mapCtx.arc(x, y, 3.5, 0, Math.PI * 2);
+    mapCtx.fillStyle = '#ffe8a0';
+    mapCtx.shadowColor = '#ffc060';
+    mapCtx.shadowBlur = 18;
+    mapCtx.fill();
+    mapCtx.shadowBlur = 0;
+  }
+
+  animFrameId = requestAnimationFrame(drawWorldMap);
+}
+
+function startMapAnimation() {
+  if (animFrameId) cancelAnimationFrame(animFrameId);
+  pulseStartTime = null;
+  animFrameId = requestAnimationFrame(drawWorldMap);
+}
+function stopMapAnimation() {
+  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+}
+
+// ════════════════════════════════════════════════
+// PIONEER WALL — infinite scroll + search
+// ════════════════════════════════════════════════
+function buildTag(p, isNew) {
+  const tag = document.createElement('div');
+  tag.className = 'pioneer-tag' + (isNew ? ' new-entry' : '');
+  tag.style.cursor = 'pointer';
+  tag.innerHTML = `
+    <div class="pioneer-dot${isNew?' warm':''}"></div>
+    <span class="pioneer-flag">${p.flag||'✦'}</span>
+    <span class="pioneer-name">${p.name}</span>${badgeHTML(p, true)}
+  `;
+  tag.addEventListener('click', () => openProfile(p));
+  return tag;
+}
+
+function renderScrollWall() {
+  const track = document.getElementById('scrollTrack');
+  track.innerHTML = '';
+  if (pioneers.length === 0) return;
+  // Double the list for seamless loop
+  const all = [...pioneers, ...pioneers];
+  all.forEach((p, i) => {
+    track.appendChild(buildTag(p, false));
+  });
+}
+
+function filterWall(q) {
+  const grid = document.getElementById('pioneerGrid');
+  const scrollOuter = document.getElementById('scrollOuter');
+  const term = q.trim().toLowerCase();
+  if (!term) {
+    grid.classList.remove('active');
+    scrollOuter.style.display = '';
+    return;
+  }
+  scrollOuter.style.display = 'none';
+  grid.classList.add('active');
+  grid.innerHTML = '';
+  pioneers.filter(p => p.name.toLowerCase().includes(term)).forEach(p => {
+    grid.appendChild(buildTag(p, false));
+  });
+}
+
+function renderWall(highlightLast) {
+  renderScrollWall();
+  // Also refresh grid if visible
+  const q = document.getElementById('wallSearch')?.value || '';
+  if (q) filterWall(q);
+}
+
+// ════════════════════════════════════════════════
+// LIVE ACTIVITY FEED
+// ════════════════════════════════════════════════
+function showFeedItem(name, country, flag) {
+  const feed = document.getElementById('activityFeed');
+  const item = document.createElement('div');
+  item.className = 'feed-item';
+  item.innerHTML = `<span class="feed-star">✨</span>${name} joined from ${country} ${flag}`;
+  feed.appendChild(item);
+  // Limit to 4
+  while (feed.children.length > 4) feed.removeChild(feed.firstChild);
+
+  // Slide in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => item.classList.add('in'));
+  });
+
+  // Fade out after 5s
+  setTimeout(() => {
+    item.classList.add('out');
+    setTimeout(() => item.remove(), 500);
+  }, 5000);
+}
+
+// ════════════════════════════════════════════════
+// JOIN FLOW
+// ════════════════════════════════════════════════
+function joinPlan() {
+  if (myProfile) { showAlreadyPioneerDialog(); return; }
+
+  const name = document.getElementById('nameInput').value.trim();
+  const sel  = document.getElementById('countrySelect');
+  const opt  = sel.options[sel.selectedIndex];
+  if (!name) { document.getElementById('nameInput').focus(); return; }
+
+  const lat       = parseFloat(opt.dataset.lat) || 0;
+  const lng       = parseFloat(opt.dataset.lng) || 0;
+  const flag      = opt.dataset.flag || '✦';
+  const country   = opt.text || '';
+  const code      = opt.value || '';
+  const continent = opt.dataset.continent || '';
+
+  const pioneer = {
+    name, country, code, flag, lat, lng, continent,
+    time: Date.now(),
+    id: 'PIO-' + (pioneers.length + 1).toString().padStart(6, '0'),
+  };
+  pioneers.push(pioneer);
+  savePioneers();
+  currentUser = pioneer;
+  newEntry = true;
+  appMode = 'pioneer';
+  myProfile = saveMyProfile(pioneer);
+  updateContinentStats();
+
+  // Show connecting overlay — staggered messages
+  const overlay = document.getElementById('connectingOverlay');
+  const l1 = document.getElementById('connLine1');
+  const l2 = document.getElementById('connLine2');
+  const l3 = document.getElementById('connLine3');
+  l1.classList.remove('visible'); l2.classList.remove('visible'); l3.classList.remove('visible');
+  overlay.classList.add('active');
+
+  setTimeout(() => l1.classList.add('visible'), 100);
+  setTimeout(() => l2.classList.add('visible'), 600);
+  setTimeout(() => l3.classList.add('visible'), 1100);
+
+  setTimeout(() => {
+    overlay.classList.remove('active');
+
+    document.getElementById('page-entry').style.display = 'none';
+    document.getElementById('page-map').style.display = 'flex';
+    document.getElementById('backBtn').style.display = 'block';
+    document.getElementById('welcomeMsg').innerHTML =
+      `Pioneer <strong style="cursor:pointer;" onclick="openProfile(currentUser)">${name}</strong> ${flag}${badgeHTML(pioneer, true)} — you are star #${pioneers.length}`;
+
+    // Reset zoom on new join
+    zoom = 1; panX = 0; panY = 0;
+
+    setTimeout(() => {
+      const wrap = document.querySelector('.map-canvas-wrap');
+      mapCanvas.width  = wrap.offsetWidth;
+      mapCanvas.height = wrap.offsetHeight;
+      startMapAnimation();
+      renderWall(true);
+      updateCount();
+      showFeedItem(name, country, flag);
+      renderLeaderboard();
+      animateGlobalStats();
+      document.getElementById('shareBlock').style.display = 'block';
+      document.getElementById('becomePioneerFab').classList.remove('shown');
+      document.getElementById('welcomeBackPanel').classList.remove('visible');
+
+      setTimeout(() => document.getElementById('signalReceived').classList.add('visible'), 600);
+      setTimeout(() => { newEntry = false; }, 9000);
+    }, 100);
+  }, 1600);
+}
+
+function returnToLanding() {
+  stopMapAnimation();
+  newEntry = false;
+  currentUser = null;
+  appMode = 'landing';
+  closePopup();
+  closeProfile();
+  document.getElementById('page-entry').style.display = 'flex';
+  document.getElementById('page-map').style.display = 'none';
+  document.getElementById('backBtn').style.display = 'none';
+  document.getElementById('becomePioneerFab').classList.remove('shown');
+  document.getElementById('welcomeBackPanel').classList.remove('visible');
+  document.getElementById('signalReceived').classList.remove('visible');
+  document.getElementById('wallSearch').value = '';
+  filterWall('');
+  updateCount();
+  updateContinentStats();
+  document.getElementById('shareBlock').style.display = 'none';
+}
+function goBack() { returnToLanding(); }
+function exitExploreToLanding() { returnToLanding(); }
+
+// ════════════════════════════════════════════════
+// V3.2 — LOCAL PIONEER IDENTITY (separate from the
+// shared registry in `pioneers` — this is just "who
+// am I on this browser")
+// ════════════════════════════════════════════════
+function loadMyProfile() {
+  try {
+    const raw = localStorage.getItem('pioneer-wall-my-profile');
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+function saveMyProfile(pioneer) {
+  const profile = {
+    name: pioneer.name, country: pioneer.country, code: pioneer.code, flag: pioneer.flag,
+    time: pioneer.time, id: pioneer.id,
+    founder: isFounder(pioneer),
+    firstOfCountry: isFirstOfCountry(pioneer),
+  };
+  try { localStorage.setItem('pioneer-wall-my-profile', JSON.stringify(profile)); } catch(e) {}
+  return profile;
+}
+
+function renderWelcomeBack(profile) {
+  const panel = document.getElementById('welcomeBackPanel');
+  const dateStr = new Date(profile.time || Date.now()).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  panel.innerHTML = `
+    <div class="wb-greeting">Welcome back, ${profile.name} 👋</div>
+    <div class="wb-field"><span>Country</span><span>${profile.flag||''} ${profile.country||''}</span></div>
+    <div class="wb-field"><span>Join Date</span><span>${dateStr}</span></div>
+    <div class="wb-field"><span>Pioneer ID</span><span>${profile.id||'—'}</span></div>
+    <div class="wb-badges">${badgeHTML(profile, false)}</div>
+    <div class="wb-notyou" onclick="promptRemoveIdentity()">Not you?</div>
+  `;
+  panel.classList.add('visible');
+}
+
+// ════════════════════════════════════════════════
+// V3.2 — MODE SWITCHING: explore / returning pioneer
+// ════════════════════════════════════════════════
+function enterMapView(withWelcomeBack) {
+  document.getElementById('page-entry').style.display = 'none';
+  document.getElementById('page-map').style.display = 'flex';
+  document.getElementById('backBtn').style.display = 'none';
+  document.getElementById('welcomeMsg').innerHTML = '';
+  document.getElementById('shareBlock').style.display = 'none';
+  document.getElementById('signalReceived').classList.remove('visible');
+  zoom = 1; panX = 0; panY = 0;
+
+  requestAnimationFrame(() => {
+    const wrap = document.querySelector('.map-canvas-wrap');
+    mapCanvas.width  = wrap.offsetWidth;
+    mapCanvas.height = wrap.offsetHeight;
+    startMapAnimation();
+    renderWall(true);
+    updateCount();
+    renderLeaderboard();
+    animateGlobalStats();
+    if (withWelcomeBack) renderWelcomeBack(myProfile);
+  });
+}
+
+function enterExploreMode() {
+  appMode = 'explore';
+  currentUser = null;
+  newEntry = false;
+  document.getElementById('welcomeBackPanel').classList.remove('visible');
+  document.getElementById('becomePioneerFab').classList.add('shown');
+  enterMapView(false);
+}
+
+function enterReturningPioneerMode() {
+  appMode = 'pioneer';
+  currentUser = myProfile;
+  newEntry = false;
+  document.getElementById('becomePioneerFab').classList.remove('shown');
+  enterMapView(true);
+}
+
+// ════════════════════════════════════════════════
+// V3.2 — DUPLICATE REGISTRATION GUARD
+// ════════════════════════════════════════════════
+function showAlreadyPioneerDialog() { document.getElementById('alreadyPioneerDialog').classList.add('active'); }
+function closeAlreadyPioneerDialog() { document.getElementById('alreadyPioneerDialog').classList.remove('active'); }
+function alreadyDialogContinueExploring() {
+  closeAlreadyPioneerDialog();
+  enterReturningPioneerMode();
+}
+function alreadyDialogViewProfile() {
+  closeAlreadyPioneerDialog();
+  enterReturningPioneerMode();
+  setTimeout(() => openProfile(myProfile), 650);
+}
+
+// ════════════════════════════════════════════════
+// V3.2 — "NOT YOU?" — remove local identity only,
+// the shared registry (`pioneers`) is untouched.
+// ════════════════════════════════════════════════
+function promptRemoveIdentity() {
+  closeProfile();
+  document.getElementById('removeIdentityDialog').classList.add('active');
+}
+function closeRemoveIdentityDialog() { document.getElementById('removeIdentityDialog').classList.remove('active'); }
+function confirmRemoveIdentity() {
+  try { localStorage.removeItem('pioneer-wall-my-profile'); } catch(e) {}
+  myProfile = null;
+  closeRemoveIdentityDialog();
+  returnToLanding();
+}
+
+window.addEventListener('resize', () => {
+  if (document.getElementById('page-map').style.display !== 'none') {
+    const wrap = document.querySelector('.map-canvas-wrap');
+    mapCanvas.width  = wrap.offsetWidth;
+    mapCanvas.height = wrap.offsetHeight;
+  }
+});
+
+document.getElementById('nameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') joinPlan();
+});
+
+// ════════════════════════════════════════════════
+// V3 — BADGES
+// ════════════════════════════════════════════════
+function isFounder(pioneer) {
+  const idx = pioneers.indexOf(pioneer);
+  return idx > -1 && idx < 1000;
+}
+function isFirstOfCountry(pioneer) {
+  if (!pioneer.code) return false;
+  const first = pioneers.find(p => p.code === pioneer.code);
+  return first === pioneer;
+}
+function badgeHTML(pioneer, compact) {
+  let html = '';
+  const founder = pioneer.founder !== undefined ? pioneer.founder : isFounder(pioneer);
+  const first = pioneer.firstOfCountry !== undefined ? pioneer.firstOfCountry : isFirstOfCountry(pioneer);
+  if (founder) {
+    html += `<span class="badge-founder">${compact ? '★' : '★ Founding Pioneer'}</span>`;
+  }
+  if (first) {
+    html += `<span class="badge-first">${compact ? '◆' : '◆ First Pioneer of ' + pioneer.country}</span>`;
+  }
+  return html;
+}
+
+// ════════════════════════════════════════════════
+// V3 — GLOBAL STATISTICS (animated counters)
+// ════════════════════════════════════════════════
+function animateNumber(el, from, to, duration) {
+  if (from === to) { el.textContent = to.toLocaleString(); return; }
+  const start = performance.now();
+  function tick(now) {
+    const p = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - p, 3);
+    const val = Math.round(from + (to - from) * eased);
+    el.textContent = val.toLocaleString();
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+function animateGlobalStats() {
+  const countries = new Set(pioneers.filter(p => p.code).map(p => p.code)).size;
+  const total = pioneers.length;
+  const dayAgo = Date.now() - 86400000;
+  const today = pioneers.filter(p => p.time >= dayAgo).length;
+
+  const elC = document.getElementById('statCountries');
+  const elT = document.getElementById('statTotal');
+  const elD = document.getElementById('statToday');
+
+  animateNumber(elC, parseInt(elC.textContent) || 0, countries, 800);
+  animateNumber(elT, parseInt(elT.textContent.replace(/,/g,'')) || 0, total, 900);
+  animateNumber(elD, parseInt(elD.textContent) || 0, today, 800);
+}
+
+// ════════════════════════════════════════════════
+// V3 — COUNTRY LEADERBOARD
+// ════════════════════════════════════════════════
+let leaderboardCollapsed = false;
+function toggleLeaderboard() {
+  leaderboardCollapsed = !leaderboardCollapsed;
+  document.getElementById('leaderboardPanel').classList.toggle('collapsed', leaderboardCollapsed);
+}
+
+function renderLeaderboard() {
+  const body = document.getElementById('leaderboardBody');
+  const counts = {};
+  pioneers.forEach(p => {
+    if (!p.country) return;
+    if (!counts[p.country]) counts[p.country] = { count: 0, flag: p.flag };
+    counts[p.country].count++;
+  });
+  const ranked = Object.entries(counts)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10);
+
+  if (ranked.length === 0) {
+    body.innerHTML = '<div class="lb-empty">No pioneers yet</div>';
+    return;
+  }
+  body.innerHTML = ranked.map(([country, data], i) => `
+    <div class="lb-row">
+      <span class="lb-rank">${i + 1}</span>
+      <span class="lb-flag">${data.flag || '✦'}</span>
+      <span class="lb-name">${country}</span>
+      <span class="lb-count">${data.count}</span>
+    </div>
+  `).join('');
+}
+
+// ════════════════════════════════════════════════
+// V3 — PIONEER PROFILE
+// ════════════════════════════════════════════════
+function openProfile(pioneer) {
+  if (!pioneer) return;
+  document.getElementById('profileName').textContent = pioneer.name;
+  document.getElementById('profileBadges').innerHTML = badgeHTML(pioneer, false) || '<span style="font-family:\'Space Mono\',monospace;font-size:8.5px;letter-spacing:2px;color:rgba(232,238,255,0.2);text-transform:uppercase;">Pioneer</span>';
+  document.getElementById('profileCountry').textContent = `${pioneer.flag || ''} ${pioneer.country || ''}`;
+  document.getElementById('profileDate').textContent = new Date(pioneer.time || Date.now()).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  document.getElementById('profileId').textContent = pioneer.id || '—';
+  const isMine = !!(myProfile && pioneer.id && pioneer.id === myProfile.id);
+  document.getElementById('profileNotYou').style.display = isMine ? 'block' : 'none';
+  document.getElementById('profileOverlay').classList.add('active');
+}
+function closeProfile() {
+  document.getElementById('profileOverlay').classList.remove('active');
+}
+
+// ════════════════════════════════════════════════
+// V3 — SHARE (UI + interaction only, no backend yet)
+// ════════════════════════════════════════════════
+function shareVia(channel) {
+  if (!currentUser) return;
+  const text = `I just joined the Pioneer Plan as star #${pioneers.length} from ${currentUser.country} ${currentUser.flag}. Join the constellation.`;
+  const url = window.location.href;
+
+  if (channel === 'copy') {
+    navigator.clipboard?.writeText(url).catch(() => {});
+    return;
+  }
+  const shareUrls = {
+    x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+    reddit: `https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+    discord: url,
+  };
+  if (shareUrls[channel]) window.open(shareUrls[channel], '_blank', 'noopener');
+}
+
+// ════════════════════════════════════════════════
+// V3 — REFRESH (shared by join flow + developer tools)
+// ════════════════════════════════════════════════
+function refreshAll() {
+  updateCount();
+  updateContinentStats();
+  renderWall();
+  renderLeaderboard();
+  animateGlobalStats();
+  if (document.getElementById('page-map').style.display !== 'none') {
+    const wrap = document.querySelector('.map-canvas-wrap');
+    if (wrap) { mapCanvas.width = wrap.offsetWidth; mapCanvas.height = wrap.offsetHeight; }
+  }
+}
+
+// ════════════════════════════════════════════════
+// V3.1 — DEVELOPER MODE (keyboard-only, no visible
+// control anywhere in the UI)
+// Toggle: Ctrl + Alt + D  (macOS: Control + Option + D)
+// ════════════════════════════════════════════════
+function toggleDevPanel(force) {
+  const panel = document.getElementById('devPanel');
+  const show = force !== undefined ? force : !panel.classList.contains('active');
+  panel.classList.toggle('active', show);
+  if (show) document.getElementById('devStatus').textContent = '';
+}
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.altKey && (e.key === 'd' || e.key === 'D')) {
+    e.preventDefault();
+    toggleDevPanel();
+    return;
+  }
+  if (e.key === 'Escape' && document.getElementById('devPanel').classList.contains('active')) {
+    toggleDevPanel(false);
+  }
+});
+
+function devStatus(msg) {
+  document.getElementById('devStatus').textContent = msg;
+}
+
+const demoFirstNames = ['Leo','Amy','Rocco','Emma','David','Nina','Marcus','Yuki','Sofia','Kai',
+  'Elena','Theo','Mira','Oscar','Anaya','Felix','Ines','Jonas','Priya','Wei',
+  'Camille','Diego','Freya','Hugo','Lena','Noor','Ravi','Sana','Tomas','Zara',
+  'Aiko','Bruno','Clara','Dmitri','Esme','Finn','Greta','Hana','Ivan','Juno'];
+
+function devGenerateDemo() {
+  const opts = Array.from(document.querySelectorAll('#countrySelect option')).filter(o => o.value && o.value !== 'OTHER');
+  const count = 50 + Math.floor(Math.random() * 51); // 50–100
+  const now = Date.now();
+  for (let i = 0; i < count; i++) {
+    const opt = opts[Math.floor(Math.random() * opts.length)];
+    const name = demoFirstNames[Math.floor(Math.random() * demoFirstNames.length)] +
+      (Math.random() < 0.4 ? ' ' + String.fromCharCode(65 + Math.floor(Math.random()*26)) + '.' : '');
+    const daysAgo = Math.floor(Math.random() * 30);
+    const jitterLat = (Math.random() - 0.5) * 4;
+    const jitterLng = (Math.random() - 0.5) * 4;
+    pioneers.push({
+      name,
+      country: opt.text,
+      code: opt.value,
+      flag: opt.dataset.flag || '✦',
+      lat: (parseFloat(opt.dataset.lat) || 0) + jitterLat,
+      lng: (parseFloat(opt.dataset.lng) || 0) + jitterLng,
+      continent: opt.dataset.continent || '',
+      time: now - daysAgo * 86400000 - Math.floor(Math.random() * 86400000),
+      id: 'PIO-' + (pioneers.length + 1).toString().padStart(6, '0'),
+    });
+  }
+  pioneers.sort((a, b) => a.time - b.time);
+  savePioneers();
+  refreshAll();
+  devStatus(`Generated ${count} demo pioneers.`);
+}
+
+function devResetAll() {
+  try { localStorage.clear(); } catch(e) {}
+
+  pioneers = [];
+  currentUser = null;
+  newEntry = false;
+  myProfile = null;
+  appMode = 'landing';
+
+  // Reset every UI component immediately, no reload
+  stopMapAnimation();
+  if (typeof mapCtx !== 'undefined' && mapCanvas) mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+  closePopup();
+  closeProfile();
+  closeAlreadyPioneerDialog();
+  closeRemoveIdentityDialog();
+  document.getElementById('activityFeed').innerHTML = '';
+  document.getElementById('shareBlock').style.display = 'none';
+  document.getElementById('becomePioneerFab').classList.remove('shown');
+  document.getElementById('welcomeBackPanel').classList.remove('visible');
+  document.getElementById('signalReceived').classList.remove('visible');
+  document.getElementById('wallSearch').value = '';
+  filterWall('');
+  refreshAll();
+
+  // Instantly reflect zero — don't wait for the count-up animation
+  document.getElementById('statCountries').textContent = '0';
+  document.getElementById('statTotal').textContent = '0';
+  document.getElementById('statToday').textContent = '0';
+  document.getElementById('countDisplay').textContent = '0';
+
+  // Return to the entry page for a truly fresh start
+  document.getElementById('page-entry').style.display = 'flex';
+  document.getElementById('page-map').style.display = 'none';
+  document.getElementById('backBtn').style.display = 'none';
+
+  devStatus('Registry fully reset — localStorage cleared, back to empty state.');
+}
+
+function devExportData() {
+  const blob = new Blob([JSON.stringify(pioneers, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pioneer-data-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  devStatus(`Exported ${pioneers.length} pioneers.`);
+}
+
+function devImportData(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data)) throw new Error('Not an array');
+      pioneers = data.map((p, i) => ({
+        name: p.name || 'Pioneer',
+        country: p.country || '',
+        code: p.code || '',
+        flag: p.flag || '✦',
+        lat: p.lat || 0,
+        lng: p.lng || 0,
+        continent: p.continent || '',
+        time: p.time || Date.now(),
+        id: p.id || ('PIO-' + (i + 1).toString().padStart(6, '0')),
+      }));
+      savePioneers();
+      refreshAll();
+      devStatus(`Imported ${pioneers.length} pioneers.`);
+    } catch (e) {
+      devStatus('Import failed: invalid JSON file.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ════════════════════════════════════════════════
+// V3.2 — APP INIT: detect a returning Pioneer and
+// skip straight to the map; otherwise show landing.
+// ════════════════════════════════════════════════
+renderScrollWall();
+renderLeaderboard();
+myProfile = loadMyProfile();
+if (myProfile) {
+  enterReturningPioneerMode();
+}
+</script>
+</body>
+</html>
